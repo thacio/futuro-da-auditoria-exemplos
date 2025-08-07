@@ -1,0 +1,119 @@
+{
+  "name": "Send Email via Webhook (Gmail SMTP)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2a8a9c1f-6f9c-4b42-91ee-2d9a4a7f6b01",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "send-email-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "function isHtml(s = \"\") {\n  return /<\\/?[a-z][\\s\\S]*>/i.test(s);\n}\n\nconst items = $input.all();\n\nreturn items.map(item => {\n  // Pull your payload out of either item.json.body (Webhook) or item.json (direct)\n  const payload = item.json?.body ?? item.json;\n\n  const to = payload?.to;\n  const subject = payload?.subject;\n  // Accept body under “body”, “text”, or “message”\n  const message = payload?.body ?? payload?.text ?? payload?.message;\n\n  if (!to || !subject || !message) {\n    throw new Error('Missing one of required fields: \"to\", \"subject\", or \"body\"/\"text\"/\"message\".');\n  }\n\n  const sentAt = new Date().toISOString();\n  const sentAtLocal = new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' });\n\n  const html = isHtml(message)\n    ? String(message)\n    : `<pre style=\"white-space:pre-wrap;margin:0;\">${String(message)}</pre>`;\n\n  const htmlWithStamp = `\n    ${html}\n    <hr style=\"border:none;border-top:1px solid #ddd;margin:16px 0;\">\n    <div style=\"font-size:12px;color:#666;\">\n      Sent at (UTC): ${sentAt}<br/>\n      Sent at (America/Sao_Paulo): ${sentAtLocal}\n    </div>\n  `;\n\n  const textWithStamp = `${String(message)}\\n\\n---\\nSent at (UTC): ${sentAt}\\nSent at (America/Sao_Paulo): ${sentAtLocal}`;\n\n  return {\n    json: {\n      emailTo:      to,\n      emailSubject: subject,\n      emailHtml:    htmlWithStamp,\n      emailText:    textWithStamp,\n      sentAt,\n      sentAtLocal,\n    }\n  };\n});"
+      },
+      "id": "9d45c7a7-5b9e-4b61-9ee4-6f3e5a1d8a02",
+      "name": "Validate & Format",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "user@example.com",
+        "toEmail": "={{$json.emailTo}}",
+        "subject": "={{$json.emailSubject}}",
+        "emailFormat": "html",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "d6c2c6ad-3c69-4bfb-8f4a-dcf0d72c4f03",
+      "name": "Email Send (Gmail SMTP)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        720,
+        304
+      ],
+      "webhookId": "a805c373-efc2-459a-ba2d-1a7b51b11878",
+      "credentials": {
+        "smtp": {
+          "id": "smtp-gmail-local",
+          "name": "SMTP (Gmail) - Local"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'sent', to: $json.emailTo, subject: $json.emailSubject, sentAt: $json.sentAt }) }}",
+        "options": {}
+      },
+      "id": "8b2b7c10-c6a6-4f29-9a8a-9d2e2f9a4b04",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Format": {
+      "main": [
+        [
+          {
+            "node": "Email Send (Gmail SMTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Send (Gmail SMTP)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "5414a6bb-4ba7-47e1-868c-2e1e922ddc1c",
+  "meta": {
+    "instanceId": "af9f852b6bec4011e9b663fbd3759d65e0661bed7c79110b7b0d687af2e0fa40"
+  },
+  "id": "ZByD37DKlRyjW4kj",
+  "tags": []
+}

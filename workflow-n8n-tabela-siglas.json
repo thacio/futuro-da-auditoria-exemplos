@@ -1,0 +1,193 @@
+{
+  "name": "MCP Acronym Extractor with Gemini AI",
+  "nodes": [
+    {
+      "parameters": {
+        "fileName": "=/files/{{$binary.file.fileName}}",
+        "dataPropertyName": "file",
+        "options": {}
+      },
+      "id": "d556e487-3375-48a9-b215-de1b92ac4a0d",
+      "name": "Write Uploaded File",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        656,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=python -m markitdown  /files/{{$binary.file.fileName}}"
+      },
+      "id": "fa47cb45-63b9-449c-9e84-1e4a2bdc4eb5",
+      "name": "Extract Markdown (markitdown)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        880,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "acronym-extractor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8b24c540-3952-4974-ab4b-9342833f658b",
+      "name": "MCP Upload Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        528
+      ],
+      "webhookId": "mcp-acronym-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nlet response = items[0]?.json || {};\n\nif (items.length > 1 && items[1]?.json?.candidates) {\n  try {\n    const geminiResponse = items[1].json.candidates[0]?.content?.parts?.[0]?.text;\n    if (geminiResponse) {\n      response.acronymsTable = geminiResponse.trim();\n      response.geminiResponse = geminiResponse.trim();\n    } else {\n      response.acronymsTable = 'Erro: Resposta inválida do Gemini AI';\n    }\n  } catch (error) {\n    response.acronymsTable = `Erro ao processar resposta do Gemini: ${error.message}`;\n  }\n} else {\n  response.acronymsTable = 'Erro: Falha na comunicação com Gemini AI';\n}\n\nreturn [{ json: response }];"
+      },
+      "id": "e549a7d2-24ee-4410-9c31-1adb7bccd5e6",
+      "name": "Combine Responses1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{$json.content.parts[0].text.replace(/```/g, '').trim()}}",
+        "options": {}
+      },
+      "id": "cbe67ee5-4980-4cfa-9f90-fded99fee698",
+      "name": "Respond to MCP1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1632,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.0-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.0-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=  = $json.markdownText {{ $json.stdout }}"
+            }
+          ]
+        },
+        "options": {
+          "systemMessage": "Analise o documento que o usuário irá te passar e crie uma \"Tabela de Siglas\" com todas as siglas e seus significados encontrados no texto.  INSTRUÇÕES: 1. Identifique todas as siglas (abreviações em maiúsculas) presentes no documento 2. Para cada sigla, forneça seu significado completo conforme mencionado no documento 3. Organize os resultados em uma tabela markdown bem formatada 4. Use as colunas: \"Sigla\" e \"Significado\" 5. Ordene alfabeticamente pelas siglas 6. Se não encontrar siglas, retorne \"Nenhuma sigla encontrada no documento\"  FORMATO DA RESPOSTA: Retorne APENAS a tabela markdown, sem texto adicional antes ou depois.  DOCUMENTO:"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        528
+      ],
+      "id": "c41b2384-f454-4086-b7a7-600e28963f5a",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "google-gemini-api-local",
+          "name": "Google Gemini API - Local"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Write Uploaded File": {
+      "main": [
+        [
+          {
+            "node": "Extract Markdown (markitdown)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Markdown (markitdown)": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Upload Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Write Uploaded File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Responses1": {
+      "main": [
+        [
+          {
+            "node": "Respond to MCP1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Combine Responses1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "executionTimeout": -1
+  },
+  "versionId": "bfa1a274-e523-4183-a0f7-942830a3f710",
+  "meta": {
+    "instanceId": "af9f852b6bec4011e9b663fbd3759d65e0661bed7c79110b7b0d687af2e0fa40",
+    "templateCredsSetupCompleted": true
+  },
+  "id": "mcp-acronym-extractor",
+  "tags": [
+    {
+      "createdAt": "2024-08-03T00:00:00.000Z",
+      "updatedAt": "2024-08-03T00:00:00.000Z",
+      "id": "mcp-tag",
+      "name": "mcp-integration"
+    }
+  ]
+}
